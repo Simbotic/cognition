@@ -23,7 +23,7 @@
       next_id: "tell_time"
 
 - id: buy_book
-  text: "Great choice! Which book do you want to buy?"
+  text: "Which book do you want to buy?"
   choices:
     - choice: "Harry Potter and the Philosopher's Stone"
       next_id: "harry_potter"
@@ -31,7 +31,7 @@
       next_id: "mockingbird"
 
 - id: buy_movie
-  text: "Excellent! Which movie do you want to buy?"
+  text: "Which movie do you want to buy?"
   choices:
     - choice: "The Godfather"
       next_id: "godfather"
@@ -52,36 +52,47 @@
     - choice: "Yes, I have another question."
       next_id: "ask_question"
     - choice: "No, that's all. Thanks!"
-      next_id: "exit"
+      next_id: "done"
 
 - id: harry_potter
   text: "Harry Potter and the Philosopher's Stone costs $10. Would you like to buy it?"
   choices:
     - choice: "Yes"
-      next_id: "exit"
+      next_id: "done"
     - choice: "No"
-      next_id: "exit"
+      next_id: "done"
 
 - id: mockingbird
   text: "To Kill a Mockingbird costs $12. Would you like to buy it?"
   choices:
     - choice: "Yes"
-      next_id: "exit"
+      next_id: "done"
     - choice: "No"
-      next_id: "exit"
+      next_id: "done"
 
 - id: godfather
   text: "The Godfather costs $15. Would you like to buy it?"
+  predict: false
   choices:
     - choice: "Yes"
-      next_id: "exit"
+      next_id: "done"
     - choice: "No"
-      next_id: "exit"
+      next_id: "done"
 
 - id: star_wars
   text: "Star Wars: A New Hope costs $20. Would you like to buy it?"
+  predict: false
   choices:
     - choice: "Yes"
-      next_id: "exit"
+      next_id: "done"
     - choice: "No"
+      next_id: "done"
+
+- id: done
+  text: "All Done?"
+  predict: false
+  choices:
+    - choice: "Start over"
+      next_id: "greeting"
+    - choice: "Exit"
       next_id: "exit"

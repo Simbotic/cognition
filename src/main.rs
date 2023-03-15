@@ -14,6 +14,7 @@ use tokio::runtime::Runtime;
 struct Dialog {
     id: String,
     text: String,
+    predict: Option<bool>,
     choices: Vec<Choice>,
 }
 
@@ -57,11 +58,18 @@ impl DecisionPromptTemplate {
         Self(contents)
     }
 
-    fn format(&self, decision_prompt: &str, choices: &str, user_response: &str) -> String {
+    fn format(
+        &self,
+        history: &str,
+        decision_prompt: &str,
+        choices: &str,
+        user_response: &str,
+    ) -> String {
         self.0
-            .replace("{{ decision_prompt }}", decision_prompt)
-            .replace("{{ choices }}", choices)
-            .replace("{{ user_response }}", user_response)
+            .replace("{{history}}", history)
+            .replace("{{decision_prompt}}", decision_prompt)
+            .replace("{{choices}}", choices)
+            .replace("{{user_response}}", user_response)
     }
 }
 
@@ -103,10 +111,12 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
     let dialog: Vec<Dialog> = serde_yaml::from_reader(reader)?;
 
     // Load the YAML prompt_decision template file
-    let decision_prompt_template =
-        DecisionPromptTemplate::new("decision_prompt_template.yaml");
+    let decision_prompt_template = DecisionPromptTemplate::new("decision_prompt_template.yaml");
 
     let agent = "Agent";
+    let user = "User";
+
+    let mut history = String::new();
 
     // Initialize the dialog
     let mut current_id = "greeting".to_string();
@@ -120,10 +130,24 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
             .find(|obj| obj.id == current_id)
             .ok_or("Oops, something went wrong. Please try again.")?;
 
+        // If decision doesn't support prediction, disable prediction
+        if let Some(false) = current_dialog.predict {
+            predicting_choice = false;
+        }
+
         // Print the current text and choices
         println!("{}: {}", agent, current_dialog.text);
         for choice in &current_dialog.choices {
             println!("- {}", choice.choice);
+        }
+
+        // Update the history with the current text
+        if !predicting_choice {
+            if history.len() > 0 {
+                history.push_str(&format!("  {}: {}\n", agent, current_dialog.text));
+            } else {
+                history.push_str(&format!("{}: {}\n", agent, current_dialog.text));
+            }
         }
 
         // Map choices to choices.choice
@@ -132,7 +156,7 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
             .iter()
             .map(|choice| choice.choice.trim().to_string())
             .collect();
-        let choices = choices.join("\n - ");
+        let choices = choices.join("\n  - ");
 
         // Prompt the user for input, unless we are predicting the choice
         if !predicting_choice {
@@ -141,12 +165,15 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
             std::io::stdout().flush()?;
             std::io::stdin().read_line(&mut user_input)?;
             user_response = user_input.trim().to_string();
+
+            // Update the history with the user's response
+            history.push_str(&format!("  {}: {}\n", user, user_response));
         }
 
         // Create the prompt_decision
         let decision_prompt = current_dialog.text.clone();
         let decision_prompt =
-            decision_prompt_template.format(&decision_prompt, &choices, &user_response);
+            decision_prompt_template.format(&history, &decision_prompt, &choices, &user_response);
         println!("++++++ PROMPT ++++++");
         print!("{}", decision_prompt);
 

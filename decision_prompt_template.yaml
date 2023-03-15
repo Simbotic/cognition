@@ -1,10 +1,22 @@
-# The decision the user needs to make
-decision: {{ decision_prompt }}
-# The available choices
+# This is a conversation between the user and an agent.
+# The agent is helping the user make a decision.
+history: |
+  {{history}}
+
+# The agent is asking the user to make a decision based on the current situation.
+# Please provide a clear and concise response that aligns with the context of the conversation.
+decision: {{decision_prompt}}
+
+# Here are the possible choices the user can make.
+# The AI should carefully consider these options when interpreting the user's response.
 choices:
- - Ambiguous
- - {{ choices }}
-# User's response
-response: {{ user_response }}
-# The choice inferred from the user's response
+  - Ambiguous
+  - {{choices}}
+
+# The user has provided their response to the agent's decision prompt.
+# Consider the user's response and the available choices to accurately infer their intent.
+response: {{user_response}}
+
+# Provide the best choice that matches the user's response or the conversation history.
+# Ensure that the choice aligns with the context and is relevant to the user's needs.
 choice: 
