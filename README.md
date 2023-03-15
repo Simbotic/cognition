@@ -1,11 +1,12 @@
-# Cognition System
+# Cognition
+## PoC cognitive decision-making system
 
-The Cognition System is a decision-making tool that utilizes OpenAI's GPT-3 to interact with users and help them make decisions based on a predefined decision tree. The system also integrates with other AI tools like Wolfram|Alpha to answer factual and mathematical questions.
+Cognition is a decision-making tool that utilizes Large Language Models (LLMs) to interact with users and help them make decisions based on a predefined decision tree. The system also integrates with other AI tools like Wolfram|Alpha to answer factual and mathematical questions.
 
 ## Features
 
 - Predefined decision tree in YAML format
-- Integration with OpenAI's GPT-3 for decision-making
+- Integration with Large Language Models (LLMs) for decision-making
 - Recursive prediction of user responses
 - Integration with Wolfram|Alpha for answering factual and mathematical questions
 
@@ -16,8 +17,8 @@ To install and run the Cognition System, you'll need Rust installed on your mach
 ### Clone the repository
 
 ```
-git clone https://github.com/yourusername/cognition-system.git
-cd cognition-system
+git clone https://github.com/Simbotic/cognition.git
+cd cognition
 ```
 
 ### Configure API keys
@@ -36,7 +37,7 @@ cargo run --release
 
 ## Usage
 
-Once you've built and run the Cognition System, you'll be prompted with a series of questions and choices. You can navigate the decision tree by typing your choice and pressing Enter. To exit the system, type "exit" when prompted.
+Once you've built and run Cognition, you'll be prompted with a series of questions and choices. You can navigate the decision tree by typing your choice and pressing Enter. To exit the system, type "exit" when prompted.
 
 ## Customization
 
