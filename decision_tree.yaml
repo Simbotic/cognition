@@ -1,4 +1,4 @@
-- id: greeting
+- id: start
   text: "Hello! How can I help you today?"
   choices:
     - choice: "I want to buy something."
@@ -95,7 +95,7 @@
   predict: false
   choices:
     - choice: "Start over"
-      next_id: "greeting"
+      next_id: "start"
     - choice: "Exit"
       next_id: "exit"
 
@@ -104,7 +104,7 @@
   text: "Asked Wolfram|Alpha..."
   predict: false
   choices:
-    - choice: "Ask Wolfram|Alpha"
+    - choice: "No more questions"
+      next_id: "done"
+    - choice: "I have another question"
       next_id: "ask_wolfram_alpha"
-    - choice: "Exit"
-      next_id: "exit"

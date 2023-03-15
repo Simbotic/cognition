@@ -6,9 +6,8 @@ The Cognition System is a decision-making tool that utilizes OpenAI's GPT-3 to i
 
 - Predefined decision tree in YAML format
 - Integration with OpenAI's GPT-3 for decision-making
+- Recursive prediction of user responses
 - Integration with Wolfram|Alpha for answering factual and mathematical questions
-- Asynchronous requests for improved performance
-- User-friendly interactive command-line interface
 
 ## Installation
 

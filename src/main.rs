@@ -151,7 +151,7 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
     let mut history = String::new();
 
     // Initialize the decision loop
-    let mut current_id = "greeting".to_string();
+    let mut current_id = "start".to_string();
     let mut predicting_choice = false;
     let mut user_response = String::new();
 
@@ -161,6 +161,13 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
             .iter()
             .find(|obj| obj.id == current_id)
             .ok_or("Oops, something went wrong. Please try again.")?;
+
+        println!("\n>>>> DECISION: {}\n", decision_node.id);
+
+        if decision_node.id == "start" {
+            // If the user chooses to start over, reset the decision loop
+            history = String::new();
+        }
 
         // If node has a tool, run the tool
         if let Some(tool) = &decision_node.tool {
@@ -214,7 +221,9 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         let choices = choices.join("\n  - ");
 
         // Prompt the user for input unless predicting the choice
-        if !predicting_choice {
+        if predicting_choice {
+            print!("Predicting choice...");
+        } else {
             let mut user_input = String::new();
             print!("{}: ", user);
             std::io::stdout().flush()?;
@@ -230,7 +239,7 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         let decision_prompt =
             decision_prompt_template.format(&history, &decision_prompt, &choices, &user_response);
 
-        println!("++++++ PROMPT ++++++");
+        println!("\n++++++ PROMPT ++++++");
         print!("{}", decision_prompt);
 
         // Send the request to OpenAI asynchronously
@@ -263,13 +272,16 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
                     // If the user chooses to exit, end the decision loop
                     println!("{}: Thank you for using the cognition system.", agent);
                     break;
+                } else if next_id == "start" {
+                    current_id = next_id;
+                    // Disable prediction if we are restarting the decision loop
+                    predicting_choice = false;
                 } else {
                     // Otherwise, continue to the next decision node
                     current_id = next_id;
+                    // Try to predict the user's next choice
+                    predicting_choice = true;
                 }
-
-                // Try to predict the user's next choice
-                predicting_choice = true;
             }
             None => {
                 if predicting_choice {
