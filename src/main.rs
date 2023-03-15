@@ -1,4 +1,5 @@
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_yaml;
@@ -9,21 +10,24 @@ use std::io::{
 };
 use tokio::runtime::Runtime;
 
-// Define the YAML dialog object
+// YAML decision node structure
 #[derive(Serialize, Deserialize)]
-struct Dialog {
+struct Decision {
     id: String,
     text: String,
+    tool: Option<String>,
     predict: Option<bool>,
     choices: Vec<Choice>,
 }
 
+// Choice structure within a decision node
 #[derive(Serialize, Deserialize)]
 struct Choice {
     choice: String,
     next_id: String,
 }
 
+// OpenAI API response
 #[derive(Serialize, Deserialize)]
 struct OpenAIResponse {
     id: String,
@@ -33,6 +37,7 @@ struct OpenAIResponse {
     choices: Vec<OpenAIChoice>,
 }
 
+// A choice in OpenAI API response
 #[derive(Serialize, Deserialize)]
 struct OpenAIChoice {
     text: String,
@@ -41,13 +46,23 @@ struct OpenAIChoice {
     finish_reason: String,
 }
 
+// Log probabilities in OpenAI API response
 #[derive(Serialize, Deserialize)]
 struct OpenAILogprobs {
     top_logprobs: HashMap<String, f64>,
     text_offset: Vec<usize>,
 }
 
-// Define the YAML prompt_decision template object
+#[derive(Serialize, Deserialize)]
+struct Tool {
+    id: String,
+    name: String,
+    description: String,
+    endpoint: Url,
+    params: HashMap<String, String>,
+}
+
+// YAML prompt_decision template object
 struct DecisionPromptTemplate(String);
 
 impl DecisionPromptTemplate {
@@ -58,6 +73,7 @@ impl DecisionPromptTemplate {
         Self(contents)
     }
 
+    // Format the decision prompt template with the given parameters
     fn format(
         &self,
         history: &str,
@@ -73,6 +89,7 @@ impl DecisionPromptTemplate {
     }
 }
 
+// Send an asynchronous request to the OpenAI API
 async fn send_request(prompt: &str) -> Result<OpenAIResponse, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let mut headers = HeaderMap::new();
@@ -104,85 +121,123 @@ async fn send_request(prompt: &str) -> Result<OpenAIResponse, Box<dyn std::error
     Ok(response_json)
 }
 
-async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
-    // Load the YAML file
-    let file = File::open("dialog.yaml")?;
+// Run the decision-making process using the decision tree
+async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
+    // Load the YAML file containing decision nodes
+    let file = File::open("decision_tree.yaml")?;
     let reader = BufReader::new(file);
-    let dialog: Vec<Dialog> = serde_yaml::from_reader(reader)?;
+    let decision_nodes: Vec<Decision> = serde_yaml::from_reader(reader)?;
 
-    // Load the YAML prompt_decision template file
+    // Load the decision prompt template from the YAML file
     let decision_prompt_template = DecisionPromptTemplate::new("decision_prompt_template.yaml");
+
+    // Load all available AI tools
+    let tools = vec![Tool {
+        id: "wolfram_alpha".to_string(),
+        name: "Wolfram|Alpha".to_string(),
+        description: "AI tool for answering factual and mathematical questions.".to_string(),
+        endpoint: "https://api.wolframalpha.com/v1/result".try_into().unwrap(),
+        params: vec![(
+            "appid".to_string(),
+            std::env::var("WOLFRAM_APP_ID").unwrap(),
+        )]
+        .into_iter()
+        .collect(),
+    }];
 
     let agent = "Agent";
     let user = "User";
 
     let mut history = String::new();
 
-    // Initialize the dialog
+    // Initialize the decision loop
     let mut current_id = "greeting".to_string();
     let mut predicting_choice = false;
     let mut user_response = String::new();
 
     loop {
-        // Find the current dialog object
-        let current_dialog = dialog
+        // Find the current decision node
+        let decision_node = decision_nodes
             .iter()
             .find(|obj| obj.id == current_id)
             .ok_or("Oops, something went wrong. Please try again.")?;
 
-        // If decision doesn't support prediction, disable prediction
-        if let Some(false) = current_dialog.predict {
+        // If node has a tool, run the tool
+        if let Some(tool) = &decision_node.tool {
+            // Find the tool
+            let tool = tools
+                .iter()
+                .find(|obj| obj.id == *tool)
+                .ok_or("Oops, something went wrong. Please try again.")?;
+            let client = reqwest::Client::new();
+            let headers = HeaderMap::new();
+
+            // Create params for tool
+            let mut params = tool.params.clone();
+            params.insert("i".to_string(), user_response.clone());
+
+            // Create query string from params
+            let query_string = serde_urlencoded::to_string(params).unwrap();
+            let url = format!("{}?{}", tool.endpoint, query_string);
+
+            // Send request to AI tool
+            let response = client.get(&url).headers(headers).send().await?;
+            println!("{}: {}", agent, response.text().await?);
+        }
+
+        // If node doesn't support prediction, disable prediction
+        if let Some(false) = decision_node.predict {
             predicting_choice = false;
         }
 
-        // Print the current text and choices
-        println!("{}: {}", agent, current_dialog.text);
-        for choice in &current_dialog.choices {
+        // Display the current text and choices
+        println!("{}: {}", agent, decision_node.text);
+        for choice in &decision_node.choices {
             println!("- {}", choice.choice);
         }
 
         // Update the history with the current text
         if !predicting_choice {
             if history.len() > 0 {
-                history.push_str(&format!("  {}: {}\n", agent, current_dialog.text));
+                history.push_str(&format!("\n  {}: {}", agent, decision_node.text));
             } else {
-                history.push_str(&format!("{}: {}\n", agent, current_dialog.text));
+                history.push_str(&format!("{}: {}", agent, decision_node.text));
             }
         }
 
         // Map choices to choices.choice
-        let choices: Vec<String> = current_dialog
+        let choices: Vec<String> = decision_node
             .choices
             .iter()
             .map(|choice| choice.choice.trim().to_string())
             .collect();
         let choices = choices.join("\n  - ");
 
-        // Prompt the user for input, unless we are predicting the choice
+        // Prompt the user for input unless predicting the choice
         if !predicting_choice {
             let mut user_input = String::new();
-            print!("User: ");
+            print!("{}: ", user);
             std::io::stdout().flush()?;
             std::io::stdin().read_line(&mut user_input)?;
             user_response = user_input.trim().to_string();
 
             // Update the history with the user's response
-            history.push_str(&format!("  {}: {}\n", user, user_response));
+            history.push_str(&format!("\n  {}: {}", user, user_response));
         }
 
-        // Create the prompt_decision
-        let decision_prompt = current_dialog.text.clone();
+        // Create the decision prompt
+        let decision_prompt = decision_node.text.clone();
         let decision_prompt =
             decision_prompt_template.format(&history, &decision_prompt, &choices, &user_response);
+
         println!("++++++ PROMPT ++++++");
         print!("{}", decision_prompt);
 
         // Send the request to OpenAI asynchronously
-        let response_json = send_request(&decision_prompt).await?;
-        // println!("RESPONSE: {:?}", serde_json::to_string(&response_json));
+        let response = send_request(&decision_prompt).await?;
 
         // Get the first choice from the response
-        let choice = response_json
+        let choice = response
             .choices
             .get(0)
             .ok_or("OpenAI did not return any choices")?
@@ -194,39 +249,39 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
         println!("--------------------");
 
         // Try to match the user's response with one of the choices
-        let choice_index = current_dialog
+        let choice_index = decision_node
             .choices
             .iter()
             .position(|o| o.choice == choice);
 
         match choice_index {
             Some(index) => {
-                // Get the next dialog ID based on the user's choice
-                let next_id = current_dialog.choices[index].next_id.clone();
+                // Get the next decision node ID based on the user's choice
+                let next_id = decision_node.choices[index].next_id.clone();
 
                 if next_id == "exit" {
-                    // If the user chooses to exit, end the dialog
-                    println!("{}: Thank you for using the dialog system.", agent);
+                    // If the user chooses to exit, end the decision loop
+                    println!("{}: Thank you for using the cognition system.", agent);
                     break;
                 } else {
-                    // Otherwise, continue to the next dialog
+                    // Otherwise, continue to the next decision node
                     current_id = next_id;
                 }
 
                 // Try to predict the user's next choice
-                if !predicting_choice {
-                    predicting_choice = true;
-                }
+                predicting_choice = true;
             }
             None => {
                 if predicting_choice {
-                    // If user's choice could not be predicted, switch to user mode and repeat the prompt
-                    predicting_choice = false;
+                    // If user's choice could not be predicted, disable prediction and repeat the prompt
                     println!("Failed to predict the user's choice.");
                 } else {
                     // If no match is found, repeat the prompt
                     println!("{}: I'm sorry, I didn't understand your response.", agent);
                 }
+
+                // Disable prediction
+                predicting_choice = false;
             }
         }
     }
@@ -236,5 +291,5 @@ async fn run_dialog() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     let rt = Runtime::new().unwrap();
-    rt.block_on(run_dialog()).unwrap();
+    rt.block_on(run_decision()).unwrap();
 }

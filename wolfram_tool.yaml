@@ -1,0 +1,7 @@
+id: wolfram_alpha
+name: Wolfram|Alpha
+description: AI tool for answering factual and mathematical questions.
+endpoint: https://api.wolframalpha.com/v1/result
+params:
+  appid: {{WOLFRAM_APP_ID}}
+  i: {{input}}

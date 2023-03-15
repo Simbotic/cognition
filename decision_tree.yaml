@@ -21,6 +21,8 @@
       next_id: "help_with_computer"
     - choice: "Do you know the time?"
       next_id: "tell_time"
+    - choice: "Ask Wolfram|Alpha"
+      next_id: "ask_wolfram_alpha"
 
 - id: buy_book
   text: "Which book do you want to buy?"
@@ -94,5 +96,15 @@
   choices:
     - choice: "Start over"
       next_id: "greeting"
+    - choice: "Exit"
+      next_id: "exit"
+
+- id: ask_wolfram_alpha
+  tool: wolfram_alpha
+  text: "Asked Wolfram|Alpha..."
+  predict: false
+  choices:
+    - choice: "Ask Wolfram|Alpha"
+      next_id: "ask_wolfram_alpha"
     - choice: "Exit"
       next_id: "exit"
