@@ -30,6 +30,7 @@ You'll need to set environment variables for the OpenAI and Wolfram|Alpha API ke
 ```
 export OPENAI_API_KEY="your_openai_api_key"
 export WOLFRAM_APP_ID="your_wolfram_app_id"
+export TEXTGEN_SERVER="your_textgen_server"
 ```
 
 ### Build and run
