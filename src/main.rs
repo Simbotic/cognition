@@ -1,7 +1,7 @@
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use models::LargeLanguageModel;
+use reqwest::header::HeaderMap;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_yaml;
 use std::collections::HashMap;
 use std::fs::File;
@@ -9,6 +9,9 @@ use std::io::{
     Write, {BufReader, Read},
 };
 use tokio::runtime::Runtime;
+
+mod models;
+mod tools;
 
 // YAML decision node structure
 #[derive(Serialize, Deserialize)]
@@ -25,32 +28,6 @@ struct Decision {
 struct Choice {
     choice: String,
     next_id: String,
-}
-
-// OpenAI API response
-#[derive(Serialize, Deserialize)]
-struct OpenAIResponse {
-    id: String,
-    object: String,
-    created: usize,
-    model: String,
-    choices: Vec<OpenAIChoice>,
-}
-
-// A choice in OpenAI API response
-#[derive(Serialize, Deserialize)]
-struct OpenAIChoice {
-    text: String,
-    index: usize,
-    logprobs: Option<OpenAILogprobs>,
-    finish_reason: String,
-}
-
-// Log probabilities in OpenAI API response
-#[derive(Serialize, Deserialize)]
-struct OpenAILogprobs {
-    top_logprobs: HashMap<String, f64>,
-    text_offset: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -89,40 +66,11 @@ impl DecisionPromptTemplate {
     }
 }
 
-// Send an asynchronous request to the OpenAI API
-async fn send_request(prompt: &str) -> Result<OpenAIResponse, Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
-    let mut headers = HeaderMap::new();
-    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    headers.insert(
-        AUTHORIZATION,
-        HeaderValue::from_str(&format!(
-            "Bearer {}",
-            std::env::var("OPENAI_API_KEY").unwrap()
-        ))?,
-    );
-    let response = client
-        .post("https://api.openai.com/v1/completions")
-        .headers(headers)
-        .json(&json!({
-            "model": "text-davinci-003",
-            "prompt": prompt,
-            "suffix": "\n\n",
-            "temperature": 0.7,
-            "max_tokens": 100,
-            "top_p": 1,
-            "frequency_penalty": 0,
-            "presence_penalty": 0,
-        }))
-        .send()
-        .await?;
-    let response_text = response.text().await?;
-    let response_json: OpenAIResponse = serde_json::from_str(&response_text)?;
-    Ok(response_json)
-}
-
 // Run the decision-making process using the decision tree
 async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
+    // LLM model
+    let model = models::davinci003::Davinci003::new("").unwrap();
+
     // Load the YAML file containing decision nodes
     let file = File::open("decision_tree.yaml")?;
     let reader = BufReader::new(file);
@@ -243,16 +191,9 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         print!("{}", decision_prompt);
 
         // Send the request to OpenAI asynchronously
-        let response = send_request(&decision_prompt).await?;
-
-        // Get the first choice from the response
-        let choice = response
-            .choices
-            .get(0)
-            .ok_or("OpenAI did not return any choices")?
-            .text
-            .trim()
-            .to_string();
+        let choice = model.generate_response(&decision_prompt, 100, 0.0).await;
+        println!("choice: {:?}", choice);
+        let choice = choice.unwrap().text;
 
         println!("{}", choice);
         println!("--------------------");
