@@ -70,6 +70,7 @@ impl DecisionPromptTemplate {
 async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
     // LLM model
     let model = models::davinci003::Davinci003::new("").unwrap();
+    // let model = models::textgen::Textgen::new("").unwrap();
 
     // Load the YAML file containing decision nodes
     let file = File::open("decision_tree.yaml")?;
@@ -191,7 +192,7 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         print!("{}", decision_prompt);
 
         // Send the request to OpenAI asynchronously
-        let choice = model.generate_response(&decision_prompt, 100, 0.0).await;
+        let choice = model.generate(&decision_prompt, 200, 0.5).await;
         println!("choice: {:?}", choice);
         let choice = choice.unwrap().text;
 

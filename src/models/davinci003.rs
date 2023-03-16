@@ -54,7 +54,7 @@ impl LargeLanguageModel for Davinci003 {
         Ok(Self { client })
     }
 
-    async fn generate_response(
+    async fn generate(
         &self,
         prompt: &str,
         max_length: usize,
@@ -98,13 +98,5 @@ impl LargeLanguageModel for Davinci003 {
         };
 
         Ok(result)
-    }
-
-    async fn complete_text(
-        &self,
-        text: &str,
-        max_length: usize,
-    ) -> Result<InferenceResult, Box<dyn Error>> {
-        self.generate_response(text, max_length, 1.0).await
     }
 }

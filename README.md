@@ -9,6 +9,9 @@ Cognition is a decision-making tool that utilizes Large Language Models (LLMs) t
 - Integration with Large Language Models (LLMs) for decision-making
 - Recursive prediction of user responses
 - Integration with Wolfram|Alpha for answering factual and mathematical questions
+- Supports:
+    - OpenAI davinci-003 LLM
+    - LLaMA models, including 4-bit modes
 
 ## Installation
 
