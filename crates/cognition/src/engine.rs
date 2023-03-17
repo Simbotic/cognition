@@ -1,4 +1,7 @@
-use models::LargeLanguageModel;
+use crate::{
+    models::{self, LargeLanguageModel},
+    CognitionError,
+};
 use reqwest::header::HeaderMap;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -8,10 +11,6 @@ use std::fs::File;
 use std::io::{
     Write, {BufReader, Read},
 };
-use tokio::runtime::Runtime;
-
-mod models;
-mod tools;
 
 // YAML decision node structure
 #[derive(Serialize, Deserialize)]
@@ -67,15 +66,17 @@ impl DecisionPromptTemplate {
 }
 
 // Run the decision-making process using the decision tree
-async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_decision() -> Result<(), CognitionError> {
     // LLM model
     let model = models::davinci003::Davinci003::new("").unwrap();
     // let model = models::textgen::Textgen::new("").unwrap();
 
     // Load the YAML file containing decision nodes
-    let file = File::open("decision_tree.yaml")?;
+    let file = File::open("decision_tree.yaml")
+        .map_err(|err| CognitionError(format!("Failed to open decision tree file: {}", err)))?;
     let reader = BufReader::new(file);
-    let decision_nodes: Vec<Decision> = serde_yaml::from_reader(reader)?;
+    let decision_nodes: Vec<Decision> = serde_yaml::from_reader(reader)
+        .map_err(|err| CognitionError(format!("Failed to parse decision tree YAML: {}", err)))?;
 
     // Load the decision prompt template from the YAML file
     let decision_prompt_template = DecisionPromptTemplate::new("decision_prompt_template.yaml");
@@ -109,7 +110,9 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         let decision_node = decision_nodes
             .iter()
             .find(|obj| obj.id == current_id)
-            .ok_or("Oops, something went wrong. Please try again.")?;
+            .ok_or_else(|| {
+                CognitionError(format!("Could not find decision node: {}", current_id))
+            })?;
 
         println!("\n>>>> DECISION: {}\n", decision_node.id);
 
@@ -124,7 +127,7 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
             let tool = tools
                 .iter()
                 .find(|obj| obj.id == *tool)
-                .ok_or("Oops, something went wrong. Please try again.")?;
+                .ok_or_else(|| CognitionError(format!("Could not find tool: {}", tool)))?;
             let client = reqwest::Client::new();
             let headers = HeaderMap::new();
 
@@ -137,8 +140,22 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
             let url = format!("{}?{}", tool.endpoint, query_string);
 
             // Send request to AI tool
-            let response = client.get(&url).headers(headers).send().await?;
-            println!("{}: {}", agent, response.text().await?);
+            let response = client
+                .get(&url)
+                .headers(headers)
+                .send()
+                .await
+                .map_err(|err| {
+                    CognitionError(format!("Failed to send request to tool: {}", err))
+                })?;
+            println!(
+                "{}: {}",
+                agent,
+                response.text().await.map_err(|err| CognitionError(format!(
+                    "Failed to get response text: {}",
+                    err
+                )))?
+            );
         }
 
         // If node doesn't support prediction, disable prediction
@@ -175,8 +192,8 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             let mut user_input = String::new();
             print!("{}: ", user);
-            std::io::stdout().flush()?;
-            std::io::stdin().read_line(&mut user_input)?;
+            std::io::stdout().flush().unwrap();
+            std::io::stdin().read_line(&mut user_input).unwrap();
             user_response = user_input.trim().to_string();
 
             // Update the history with the user's response
@@ -241,9 +258,4 @@ async fn run_decision() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-fn main() {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(run_decision()).unwrap();
 }

@@ -1,4 +1,4 @@
-use crate::models::{InferenceResult, LargeLanguageModel};
+use crate::models::{InferenceResult, LargeLanguageModel, ModelError};
 use async_trait::async_trait;
 use reqwest::{
     header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE},
@@ -6,7 +6,6 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
 
 pub struct Davinci003 {
     client: Client,
@@ -47,9 +46,9 @@ struct OpenAILogprobs {
     text_offset: Vec<usize>,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl LargeLanguageModel for Davinci003 {
-    fn new(_config: &str) -> Result<Self, Box<dyn Error>> {
+    fn new(_config: &str) -> Result<Self, ModelError> {
         let client = Client::new();
         Ok(Self { client })
     }
@@ -59,7 +58,7 @@ impl LargeLanguageModel for Davinci003 {
         prompt: &str,
         max_length: usize,
         temperature: f32,
-    ) -> Result<InferenceResult, Box<dyn Error>> {
+    ) -> Result<InferenceResult, ModelError> {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         headers.insert(
@@ -67,7 +66,8 @@ impl LargeLanguageModel for Davinci003 {
             HeaderValue::from_str(&format!(
                 "Bearer {}",
                 std::env::var("OPENAI_API_KEY").unwrap()
-            ))?,
+            ))
+            .map_err(|e| ModelError::new(&format!("Authorization header error: {}", e)))?,
         );
 
         let request_body = OpenAIRequestBody {
@@ -87,11 +87,16 @@ impl LargeLanguageModel for Davinci003 {
             .headers(headers)
             .json(&request_body)
             .send()
-            .await?
+            .await
+            .map_err(|e| ModelError::new(&format!("HTTP request error: {}", e)))?
             .json::<OpenAIResponse>()
-            .await?;
+            .await
+            .map_err(|e| ModelError::new(&format!("JSON parsing error: {}", e)))?;
 
-        let choice = response.choices.get(0).ok_or("No choices found")?;
+        let choice = response
+            .choices
+            .get(0)
+            .ok_or_else(|| ModelError::new("No choices found"))?;
         let result = InferenceResult {
             text: choice.text.clone(),
             probabilities: vec![], // You may want to calculate probabilities based on your requirements

@@ -1,4 +1,4 @@
-use crate::models::{InferenceResult, LargeLanguageModel};
+use crate::models::{InferenceResult, LargeLanguageModel, ModelError};
 use async_trait::async_trait;
 use reqwest::{
     header::{HeaderMap, HeaderValue, CONTENT_TYPE},
@@ -6,7 +6,6 @@ use reqwest::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::error::Error;
 
 pub struct Textgen {
     server: String,
@@ -65,11 +64,13 @@ pub struct TextgenResponse {
     pub average_duration: f64,
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl LargeLanguageModel for Textgen {
-    fn new(_config: &str) -> Result<Self, Box<dyn Error>> {
+    fn new(_config: &str) -> Result<Self, ModelError> {
         Ok(Textgen {
-            server: std::env::var("TEXTGEN_SERVER").unwrap(),
+            server: std::env::var("TEXTGEN_SERVER").map_err(|e| {
+                ModelError::new(&format!("Cannot get TEXTGEN_SERVER from env var: {}", e))
+            })?,
             client: Client::new(),
         })
     }
@@ -79,7 +80,7 @@ impl LargeLanguageModel for Textgen {
         prompt: &str,
         max_length: usize,
         temperature: f32,
-    ) -> Result<InferenceResult, Box<dyn Error>> {
+    ) -> Result<InferenceResult, ModelError> {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
@@ -107,7 +108,8 @@ impl LargeLanguageModel for Textgen {
             .headers(headers)
             .json(&request_body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| ModelError::new(&format!("HTTP request error: {}", e)))?;
 
         let status = response.status();
 
@@ -117,10 +119,16 @@ impl LargeLanguageModel for Textgen {
                 .await
                 .unwrap_or_else(|_| String::from("No error details"));
             println!("Error body: {}", error_body); // Print the response body with the error message
-            return Err(format!("Error {}: {}", status, error_body).into());
+            return Err(ModelError::new(&format!(
+                "Error {}: {}",
+                status, error_body
+            )));
         }
 
-        let response_data = response.json::<TextgenResponse>().await?;
+        let response_data = response
+            .json::<TextgenResponse>()
+            .await
+            .map_err(|e| ModelError::new(&format!("JSON parsing error: {}", e)))?;
         let result = InferenceResult {
             text: response_data.data[0]
                 .clone()

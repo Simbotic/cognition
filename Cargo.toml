@@ -1,14 +1,8 @@
 [package]
-name = "cognition"
+name = "simbotic-cognition"
 version = "0.1.0"
 edition = "2021"
+# default-run = "crates/cognition"
 
-[dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-serde_json = "1.0"
-tokio = "1.26.0"
-url = { version = "2.3.1", features = ["serde"] }
-serde_urlencoded = "0.7.1"
-async-trait = "0.1.66"
+[workspace]
+members = ["crates/*"]

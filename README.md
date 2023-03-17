@@ -36,7 +36,7 @@ export TEXTGEN_SERVER="your_textgen_server"
 ### Build and run
 
 ```
-cargo run --release
+cargo run --release -p cognition-cli
 ```
 
 ## Usage
