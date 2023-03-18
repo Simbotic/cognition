@@ -1,5 +1,5 @@
 # Cognition
-## PoC cognitive decision-making system
+## Cognitive decision-making system
 
 Cognition is a decision-making tool that utilizes Large Language Models (LLMs) to interact with users and help them make decisions based on a predefined decision tree. The system also integrates with other AI tools like Wolfram|Alpha to answer factual and mathematical questions.
 
