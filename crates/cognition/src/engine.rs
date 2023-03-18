@@ -1,15 +1,12 @@
 use crate::{
+    config::string_by_path,
     models::{self, LargeLanguageModel},
     CognitionError,
 };
 use log::debug;
-use reqwest::header::HeaderMap;
-use reqwest::Url;
+use reqwest::{header::HeaderMap, Url};
 use serde::{Deserialize, Serialize};
-use serde_yaml;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read};
 
 // YAML decision node structure
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,14 +35,11 @@ struct Tool {
 }
 
 // YAML prompt_decision template object
-struct DecisionPromptTemplate(String);
+pub struct DecisionPromptTemplate(String);
 
 impl DecisionPromptTemplate {
-    fn new(file_path: &str) -> Self {
-        let mut file = File::open(file_path).unwrap();
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
-        Self(contents)
+    pub fn new(content: String) -> Self {
+        Self(content)
     }
 
     // Format the decision prompt template with the given parameters
@@ -76,35 +70,14 @@ pub struct DecisionState {
 }
 
 impl DecisionState {
-    fn decision_node(&self, id: &str) -> Result<&Decision, CognitionError> {
-        self.decision_nodes
-            .iter()
-            .find(|node| node.id == id)
-            .ok_or_else(|| CognitionError(format!("Decision node with ID '{}' not found", id)))
-    }
-
-    pub fn current_node(&self) -> Result<&Decision, CognitionError> {
-        self.decision_node(&self.current_id)
-    }
-}
-
-impl Default for DecisionState {
-    fn default() -> Self {
+    pub fn new(
+        config: &String,
+        decision_prompt_template: DecisionPromptTemplate,
+        decision_nodes: Vec<Decision>,
+    ) -> Self {
         // LLM model
-        let model = models::davinci003::Davinci003::new("").unwrap();
+        let model = models::davinci003::Davinci003::new(config).unwrap();
         // let model = models::textgen::Textgen::new("").unwrap();
-
-        // Load the YAML file containing decision nodes
-        let file = File::open("decision_tree.yaml")
-            .map_err(|err| CognitionError(format!("Failed to open decision tree file: {}", err)))
-            .unwrap();
-        let reader = BufReader::new(file);
-        let decision_nodes: Vec<Decision> = serde_yaml::from_reader(reader)
-            .map_err(|err| CognitionError(format!("Failed to parse decision tree YAML: {}", err)))
-            .unwrap();
-
-        // Load the decision prompt template from the YAML file
-        let decision_prompt_template = DecisionPromptTemplate::new("decision_prompt_template.yaml");
 
         // Load all available AI tools
         let tools = vec![Tool {
@@ -114,7 +87,7 @@ impl Default for DecisionState {
             endpoint: "https://api.wolframalpha.com/v1/result".try_into().unwrap(),
             params: vec![(
                 "appid".to_string(),
-                std::env::var("WOLFRAM_APP_ID").unwrap(),
+                string_by_path(config, "tools.wolfram_alpha.api_key").unwrap(),
             )]
             .into_iter()
             .collect(),
@@ -138,6 +111,17 @@ impl Default for DecisionState {
             history,
             current_id,
         }
+    }
+
+    fn decision_node(&self, id: &str) -> Result<&Decision, CognitionError> {
+        self.decision_nodes
+            .iter()
+            .find(|node| node.id == id)
+            .ok_or_else(|| CognitionError(format!("Decision node with ID '{}' not found", id)))
+    }
+
+    pub fn current_node(&self) -> Result<&Decision, CognitionError> {
+        self.decision_node(&self.current_id)
     }
 }
 

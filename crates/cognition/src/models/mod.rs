@@ -27,7 +27,6 @@ impl Display for ModelError {
 
 impl Error for ModelError {}
 
-
 #[derive(Debug)]
 pub struct InferenceResult {
     pub text: String,
@@ -37,7 +36,7 @@ pub struct InferenceResult {
 #[async_trait(?Send)]
 pub trait LargeLanguageModel {
     /// Initializes the model with the given configuration.
-    fn new(config: &str) -> Result<Self, ModelError>
+    fn new(config: &String) -> Result<Self, ModelError>
     where
         Self: Sized;
 

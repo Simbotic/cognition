@@ -66,7 +66,7 @@ pub struct TextgenResponse {
 
 #[async_trait(?Send)]
 impl LargeLanguageModel for Textgen {
-    fn new(_config: &str) -> Result<Self, ModelError> {
+    fn new(_config: &String) -> Result<Self, ModelError> {
         Ok(Textgen {
             server: std::env::var("TEXTGEN_SERVER").map_err(|e| {
                 ModelError::new(&format!("Cannot get TEXTGEN_SERVER from env var: {}", e))

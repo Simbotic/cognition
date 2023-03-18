@@ -1,9 +1,40 @@
-use cognition::{run_decision, CognitionError, DecisionState};
-use std::io::Write;
+use cognition::{run_decision, CognitionError, Decision, DecisionPromptTemplate, DecisionState};
+use std::fs::File;
+use std::io::{Read, Write};
 
 #[tokio::main]
 async fn main() -> Result<(), CognitionError> {
-    let mut state = DecisionState::default();
+    let decision_prompt_template = {
+        let mut file = File::open("decision_prompt_template.yaml").unwrap();
+        let mut decision_prompt_template = String::new();
+        file.read_to_string(&mut decision_prompt_template).unwrap();
+        DecisionPromptTemplate::new(decision_prompt_template)
+    };
+
+    let decision_nodes = {
+        // Load the YAML file containing decision nodes
+        let mut file = File::open("decision_tree.yaml").unwrap();
+        let mut decision_nodes = String::new();
+        file.read_to_string(&mut decision_nodes).unwrap();
+
+        let decision_nodes: Vec<Decision> = serde_yaml::from_str(&decision_nodes).unwrap();
+        decision_nodes
+    };
+
+    let config = format!(
+        r#"
+    models:
+      davinci003:
+        api_key: {}
+    tools:
+      wolfram_alpha:
+        api_key: {}
+    "#,
+        std::env::var("OPENAI_API_KEY").unwrap(),
+        std::env::var("WOLFRAM_APP_ID").unwrap()
+    );
+
+    let mut state = DecisionState::new(&config, decision_prompt_template, decision_nodes);
 
     let mut user_input = None;
     while let Some(result) = run_decision(user_input, &mut state).await? {
