@@ -19,7 +19,7 @@ pub trait Tool {
     async fn run(&self, input: &String) -> Result<Option<ToolResponse>, CognitionError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ToolResponse {
     pub id: String,
     pub response: String,

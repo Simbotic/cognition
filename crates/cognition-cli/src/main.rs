@@ -66,11 +66,27 @@ async fn main() -> Result<(), CognitionError> {
             println!("\nTOOL: [{}] {}", tool_response.id, tool_response.response);
         }
 
+        // Print predictions, if any
+        if !result.predictions.is_empty() {
+            println!("\nPREDICTIONS:");
+            for prediction in result.predictions {
+                println!("  [✓] {}: {}", prediction.id, prediction.choice);
+            }
+        }
+
         // Display the current decision text and choices
-        println!("\n>>>> DECISION: {}", result.decision_node.id);
+        println!(
+            "\nDECISION: {}: {}",
+            result.decision_node.id, result.decision_node.text
+        );
         println!("\n{}: {}", state.agent, result.decision_node.text);
-        for choice in &result.decision_node.choices {
-            println!("- {}", choice.choice);
+        for choice in result.decision_node.choices() {
+            println!("- {}", choice.text);
+        }
+
+        if result.decision_node.choices().len() == 0 {
+            println!("\n[!] No choices available. Exiting.");
+            break;
         }
 
         // Get user input

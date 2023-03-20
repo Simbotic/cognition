@@ -1,5 +1,6 @@
 - id: start
   text: "Hello! How can I help you today?"
+  reset: true
   choices:
     - choice: "I want to buy something."
       next_id: "buy_something"
@@ -47,6 +48,18 @@
       next_id: "computer_wont_turn_on"
     - choice: "My computer is running slow."
       next_id: "computer_running_slow"
+
+- id: computer_wont_turn_on
+  text: "You are fried"
+  choices:
+    - choice: "Game over"
+      next_id: "exit"
+
+- id: computer_running_slow
+  text: "This is unfortunate, but I can't help you."
+  choices:
+    - choice: "Can't help you."
+      next_id: "start"
 
 - id: tell_time
   text: "The time is currently 2:30pm. Is there anything else you need help with?"
@@ -110,3 +123,7 @@
       next_id: "done"
     - choice: "I have another question"
       next_id: "ask_wolfram_alpha"
+
+- id: exit
+  text: "Exit"
+  choices: []

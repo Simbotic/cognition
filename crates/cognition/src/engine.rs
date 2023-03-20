@@ -3,7 +3,7 @@ use crate::{
     tools::{Tool, ToolResponse},
     CognitionError,
 };
-use log::debug;
+use log::*;
 use serde::{Deserialize, Serialize};
 
 // YAML decision node structure
@@ -11,15 +11,24 @@ use serde::{Deserialize, Serialize};
 pub struct Decision {
     pub id: String,
     pub text: String,
+    pub predicted_text: Option<String>,
     pub tool: Option<String>,
     pub predict: Option<bool>,
-    pub choices: Vec<Choice>,
+    pub reset: Option<bool>,
+    pub choices: Option<Vec<Choice>>,
+}
+
+impl Decision {
+    pub fn choices(&self) -> Vec<&Choice> {
+        self.choices.iter().flat_map(|choice| choice).collect()
+    }
 }
 
 // Choice structure within a decision node
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Choice {
-    pub choice: String,
+    #[serde(rename = "choice")]
+    pub text: String,
     next_id: String,
 }
 
@@ -112,6 +121,14 @@ pub struct DecisionResult {
     pub choice: Option<String>,
     pub current_id: String,
     pub decision_node: Decision,
+    pub predictions: Vec<Prediction>,
+    pub tool_response: Option<ToolResponse>,
+}
+
+#[derive(Debug)]
+pub struct Prediction {
+    pub choice: String,
+    pub id: String,
     pub tool_response: Option<ToolResponse>,
 }
 
@@ -123,39 +140,50 @@ pub async fn run_decision(
     let mut predicting_choice = false;
     let mut tool_response = None;
     let mut decision_prompt = None;
-    let mut choice;
+    let choice: Option<String> = None;
+    let mut predictions = vec![];
 
     loop {
-        choice = None;
+        let decision_node = state.decision_node(&state.current_id)?.clone();
 
-        if let Some(user_input) = &user_input {
-            // Update the history with the user's response
-            if !predicting_choice {
-                state
-                    .history
-                    .push_str(&format!("\n  {}: {}", state.user, user_input));
-            }
+        // Map choices to choices.choice
+        let choices: Vec<&Choice> = decision_node.choices();
 
-            let decision_node = state.decision_node(&state.current_id)?.clone();
+        // If there are no choices, we're done
+        if choices.len() == 0 {
+            break;
+        }
 
-            // Map choices to choices.choice
-            let choices: Vec<String> = decision_node
-                .choices
+        // Select next choice
+        let next_choice = if user_input.is_none() {
+            // If user has not provided input, do not make a choice
+            None
+        } else if choices.len() == 1 {
+            // If there is only one choice, select it
+            debug!("Only one choice, skip prediction");
+            choices.first()
+        } else if let Some(user_input) = &user_input {
+            // If many choices, predict best choice
+            info!("User input: {:?}", user_input);
+
+            // Map choices to choice string
+            let choice_texts: Vec<String> = choices
                 .iter()
-                .map(|choice| choice.choice.trim().to_string())
+                .map(|choice| choice.text.trim().to_string())
                 .collect();
-            let choices = choices.join("\n  - ");
+
+            let choices_str = choice_texts.join("\n  - ");
 
             // Create the decision prompt
             let prompt = decision_node.text.clone();
             let mut prompt = state.decision_prompt_template.format(
                 &state.history,
                 &prompt,
-                &choices,
+                &choices_str,
                 &user_input,
             );
 
-            // Send the request to OpenAI asynchronously
+            // Few shot prediction
             let response = state
                 .model
                 .generate(&prompt, 200, 0.5)
@@ -163,62 +191,62 @@ pub async fn run_decision(
                 .map_err(|err| CognitionError(format!("Failed to generate choice: {}", err)))?;
             let response = response.text;
             prompt.push_str(&response);
-            debug!("{}", prompt);
+            debug!("{}", &prompt);
 
             // Set current prompt
             decision_prompt = Some(prompt);
 
             // Try to match the user's response with one of the choices
-            let choice_index = decision_node
-                .choices
+            choice_texts
                 .iter()
-                .position(|o| o.choice == response);
+                .position(|choice| *choice == response)
+                .and_then(|index| choices.get(index))
+        } else {
+            None
+        };
 
-            match choice_index {
-                Some(index) => {
-                    // The user's response matches one of the choices, we have a choice
-                    choice = Some(response.clone());
-                    // Get the next decision node ID based on the user's choice
-                    let next_id = decision_node.choices[index].next_id.clone();
-
-                    if next_id == "exit" {
-                        // If the user chooses to exit, end the decision loop
-                        debug!("{}: Thank you for using the cognition system.", state.agent);
-                        return Ok(None);
-                    } else if next_id == "start" {
-                        state.current_id = next_id;
-                        // Disable prediction if we are restarting the decision loop
-                        predicting_choice = false;
+        // If there is a choice, get the next decision node ID
+        if let Some(choice) = next_choice {
+            if let Some(user_input) = &user_input {
+                // Update the history with the user's response
+                if !predicting_choice {
+                    // Update the history with the current text
+                    if state.history.len() > 0 {
+                        state
+                            .history
+                            .push_str(&format!("\n  {}: {}", state.agent, decision_node.text));
                     } else {
-                        // Otherwise, continue to the next decision node
-                        state.current_id = next_id;
-                        // Try to predict the user's next choice
-                        predicting_choice = true;
+                        state
+                            .history
+                            .push_str(&format!("{}: {}", state.agent, decision_node.text));
                     }
-                }
-                None => {
-                    if predicting_choice {
-                        // If user's choice could not be predicted, disable prediction and repeat the prompt
-                        debug!("Failed to predict the user's choice.");
-                    } else {
-                        // If no match is found, repeat the prompt
-                        debug!(
-                            "{}: I'm sorry, I didn't understand your response.",
-                            state.agent
-                        );
-                    }
-
-                    // Disable prediction
-                    predicting_choice = false;
+                    // Update the history with the user's response
+                    state
+                        .history
+                        .push_str(&format!("\n  {}: {}", state.user, user_input));
                 }
             }
+
+            info!(
+                "Predicting the user's next choice... {} {}",
+                decision_node.id, decision_node.text
+            );
+            predictions.push(Prediction {
+                choice: choice.text.clone(),
+                id: choice.next_id.clone(),
+                tool_response: tool_response.clone(),
+            });
+
+            predicting_choice = true;
+            // Continue to the next decision node
+            state.current_id = choice.next_id.clone();
         }
 
         // Find the current decision node
         let decision_node = state.decision_node(&state.current_id)?.clone();
 
-        // If the user chooses to start over, reset the decision loop
-        if decision_node.id == "start" {
+        // If node has reset, reset the history
+        if let Some(true) = decision_node.reset {
             state.history = String::new();
         }
 
@@ -227,19 +255,12 @@ pub async fn run_decision(
             predicting_choice = false;
         }
 
-        // Update the history with the current text
-        if !predicting_choice {
-            if state.history.len() > 0 {
-                state
-                    .history
-                    .push_str(&format!("\n  {}: {}", state.agent, decision_node.text));
-            } else {
-                state
-                    .history
-                    .push_str(&format!("{}: {}", state.agent, decision_node.text));
-            }
+        // If there is no choice, disable prediction
+        if next_choice.is_none() {
+            predicting_choice = false;
         }
 
+        // If there is a tool, run the tool and get the response
         if let Some(user_input) = &user_input {
             // If node has a tool, run the tool
             if let Some(tool_id) = &decision_node.tool {
@@ -264,6 +285,7 @@ pub async fn run_decision(
         choice,
         current_id: state.current_id.clone(),
         decision_node: state.current_node()?.clone(),
+        predictions,
         tool_response,
     };
 
