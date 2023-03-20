@@ -1,4 +1,6 @@
-use cognition::{run_decision, CognitionError, Decision, DecisionPromptTemplate, DecisionState};
+use cognition::{
+    run_decision, tools, CognitionError, Decision, DecisionPromptTemplate, DecisionState,
+};
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -26,15 +28,24 @@ async fn main() -> Result<(), CognitionError> {
     models:
       davinci003:
         api_key: {}
-    tools:
-      wolfram_alpha:
-        api_key: {}
     "#,
         std::env::var("OPENAI_API_KEY").unwrap(),
-        std::env::var("WOLFRAM_APP_ID").unwrap()
     );
 
+    let wolfram_alpha = Box::new(tools::WolframAlpha::new(
+        std::env::var("WOLFRAM_APP_ID").unwrap(),
+    ));
+
+    let signal_book = Box::new(tools::Signal {
+        id: "signal_book".into(),
+        name: "Signal Book".into(),
+        description: "Signal Book".into(),
+        signal: "Beep!".into(),
+    });
+
     let mut state = DecisionState::new(&config, decision_prompt_template, decision_nodes);
+    state.add_tool(wolfram_alpha);
+    state.add_tool(signal_book);
 
     let mut user_input = None;
     while let Some(result) = run_decision(user_input, &mut state).await? {

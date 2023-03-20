@@ -1,12 +1,10 @@
 use crate::{
-    config::string_by_path,
     models::{self, LargeLanguageModel},
+    tools::{Tool, ToolResponse},
     CognitionError,
 };
 use log::debug;
-use reqwest::{header::HeaderMap, Url};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // YAML decision node structure
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -23,15 +21,6 @@ pub struct Decision {
 pub struct Choice {
     pub choice: String,
     next_id: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Tool {
-    id: String,
-    name: String,
-    description: String,
-    endpoint: Url,
-    params: HashMap<String, String>,
 }
 
 // YAML prompt_decision template object
@@ -62,7 +51,7 @@ pub struct DecisionState {
     model: Box<dyn LargeLanguageModel>,
     decision_nodes: Vec<Decision>,
     decision_prompt_template: DecisionPromptTemplate,
-    tools: Vec<Tool>,
+    tools: Vec<Box<dyn Tool>>,
     pub agent: String,
     pub user: String,
     history: String,
@@ -79,20 +68,6 @@ impl DecisionState {
         let model = models::davinci003::Davinci003::new(config).unwrap();
         // let model = models::textgen::Textgen::new("").unwrap();
 
-        // Load all available AI tools
-        let tools = vec![Tool {
-            id: "wolfram_alpha".to_string(),
-            name: "Wolfram|Alpha".to_string(),
-            description: "AI tool for answering factual and mathematical questions.".to_string(),
-            endpoint: "https://api.wolframalpha.com/v1/result".try_into().unwrap(),
-            params: vec![(
-                "appid".to_string(),
-                string_by_path(config, "tools.wolfram_alpha.api_key").unwrap(),
-            )]
-            .into_iter()
-            .collect(),
-        }];
-
         let agent = "Agent".into();
         let user = "User".into();
 
@@ -105,12 +80,17 @@ impl DecisionState {
             model: Box::new(model),
             decision_nodes,
             decision_prompt_template,
-            tools,
+            tools: vec![],
             agent,
             user,
             history,
             current_id,
         }
+    }
+
+    // add tool
+    pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
+        self.tools.push(tool);
     }
 
     fn decision_node(&self, id: &str) -> Result<&Decision, CognitionError> {
@@ -123,12 +103,6 @@ impl DecisionState {
     pub fn current_node(&self) -> Result<&Decision, CognitionError> {
         self.decision_node(&self.current_id)
     }
-}
-
-#[derive(Debug)]
-pub struct ToolResponse {
-    pub id: String,
-    pub response: String,
 }
 
 #[derive(Debug)]
@@ -273,37 +247,9 @@ pub async fn run_decision(
                 let tool = state
                     .tools
                     .iter()
-                    .find(|obj| obj.id == *tool_id)
+                    .find(|obj| *obj.id() == *tool_id)
                     .ok_or_else(|| CognitionError(format!("Could not find tool: {}", tool_id)))?;
-                let client = reqwest::Client::new();
-                let headers = HeaderMap::new();
-
-                // Create params for tool
-                let mut params = tool.params.clone();
-                params.insert("i".to_string(), user_input.clone());
-
-                // Create query string from params
-                let query_string = serde_urlencoded::to_string(params).unwrap();
-                let url = format!("{}?{}", tool.endpoint, query_string);
-
-                // Send request to AI tool
-                let response = client
-                    .get(&url)
-                    .headers(headers)
-                    .send()
-                    .await
-                    .map_err(|err| {
-                        CognitionError(format!("Failed to send request to tool: {}", err))
-                    })?;
-
-                let response = response.text().await.map_err(|err| {
-                    CognitionError(format!("Failed to get response text: {}", err))
-                })?;
-                debug!("{}: {}", state.agent, response);
-                tool_response = Some(ToolResponse {
-                    id: tool_id.clone(),
-                    response: response,
-                });
+                tool_response = tool.run(user_input).await?;
             }
         }
 

@@ -57,6 +57,7 @@
       next_id: "done"
 
 - id: harry_potter
+  tool: signal_book
   text: "Harry Potter and the Philosopher's Stone costs $10. Would you like to buy it?"
   choices:
     - choice: "Yes"
@@ -65,6 +66,7 @@
       next_id: "done"
 
 - id: mockingbird
+  tool: signal_book
   text: "To Kill a Mockingbird costs $12. Would you like to buy it?"
   choices:
     - choice: "Yes"

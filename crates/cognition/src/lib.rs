@@ -1,9 +1,10 @@
 mod config;
 mod engine;
-pub mod models;
+mod models;
 pub mod tools;
 
 pub use engine::{run_decision, Decision, DecisionPromptTemplate, DecisionResult, DecisionState};
+pub use tools::{Tool, ToolResponse};
 
 #[derive(Debug)]
 pub struct CognitionError(pub String);

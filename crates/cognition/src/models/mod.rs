@@ -1,10 +1,9 @@
 use async_trait::async_trait;
+use std::error::Error;
+use std::fmt::{self, Display};
 
 pub mod davinci003;
 pub mod textgen;
-
-use std::error::Error;
-use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct ModelError {
