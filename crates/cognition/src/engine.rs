@@ -142,6 +142,7 @@ pub async fn run_decision(
     let mut decision_prompt = None;
     let choice: Option<String> = None;
     let mut predictions = vec![];
+    let mut max_depth = 5;
 
     loop {
         let decision_node = state.decision_node(&state.current_id)?.clone();
@@ -205,28 +206,31 @@ pub async fn run_decision(
             None
         };
 
-        // If there is a choice, get the next decision node ID
-        if let Some(choice) = next_choice {
-            if let Some(user_input) = &user_input {
-                // Update the history with the user's response
-                if !predicting_choice {
-                    // Update the history with the current text
-                    if state.history.len() > 0 {
-                        state
-                            .history
-                            .push_str(&format!("\n  {}: {}", state.agent, decision_node.text));
-                    } else {
-                        state
-                            .history
-                            .push_str(&format!("{}: {}", state.agent, decision_node.text));
-                    }
-                    // Update the history with the user's response
+        // Update the history with the agent-user interaction
+        if let Some(user_input) = &user_input {
+            if !predicting_choice {
+                // Update the history with the current text
+                if state.history.len() > 0 {
                     state
                         .history
-                        .push_str(&format!("\n  {}: {}", state.user, user_input));
+                        .push_str(&format!("\n  - {}: {}", state.agent, decision_node.text));
+                } else {
+                    state
+                        .history
+                        .push_str(&format!("- {}: {}", state.agent, decision_node.text));
                 }
+                state
+                    .history
+                    .push_str(&format!("\n  - {}: {}", state.agent, decision_node.text));
+                // Update the history with the user's response
+                state
+                    .history
+                    .push_str(&format!("\n  - {}: {}", state.user, user_input));
             }
+        }
 
+        // If there is a choice, get the next decision node ID
+        if let Some(choice) = next_choice {
             info!(
                 "Predicting the user's next choice... {} {}",
                 decision_node.id, decision_node.text
@@ -274,7 +278,8 @@ pub async fn run_decision(
             }
         }
 
-        if !predicting_choice {
+        max_depth -= 1;
+        if !predicting_choice || max_depth == 0 {
             break;
         }
     }

@@ -15,7 +15,7 @@ async fn main() -> Result<(), CognitionError> {
 
     let decision_nodes = {
         // Load the YAML file containing decision nodes
-        let mut file = File::open("decision_tree.yaml").unwrap();
+        let mut file = File::open("cosmogene.decision_tree.yaml").unwrap();
         let mut decision_nodes = String::new();
         file.read_to_string(&mut decision_nodes).unwrap();
 

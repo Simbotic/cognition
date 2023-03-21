@@ -16,9 +16,7 @@ choices:
   - {{choices}}
 
 # The user has provided their response to the agent's decision prompt.
-# Consider the user's response and the available choices to accurately infer their intent.
 response: {{user_input}}
 
-# Provide the best choice that matches the user's response or the conversation history.
-# Ensure that the choice aligns with the context and is relevant to the user's needs.
+# Consider the user's response, the conversation history and the available choices to accurately infer their intent.
 choice: 
