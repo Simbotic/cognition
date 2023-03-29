@@ -1,9 +1,11 @@
 mod config;
 mod engine;
 mod models;
+mod templates;
 pub mod tools;
 
-pub use engine::{run_decision, Decision, DecisionPromptTemplate, DecisionResult, DecisionState};
+pub use engine::{run_decision, Decision, DecisionResult, DecisionState};
+pub use templates::decision::DecisionPromptTemplate;
 pub use tools::{Tool, ToolResponse};
 
 #[derive(Debug)]

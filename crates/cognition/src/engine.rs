@@ -1,7 +1,6 @@
 use crate::{
     models::{self, LargeLanguageModel},
-    tools::{Tool, ToolResponse},
-    CognitionError,
+    CognitionError, DecisionPromptTemplate, Tool, ToolResponse,
 };
 use log::*;
 use serde::{Deserialize, Serialize};
@@ -30,30 +29,6 @@ pub struct Choice {
     #[serde(rename = "choice")]
     pub text: String,
     next_id: String,
-}
-
-// YAML prompt_decision template object
-pub struct DecisionPromptTemplate(String);
-
-impl DecisionPromptTemplate {
-    pub fn new(content: String) -> Self {
-        Self(content)
-    }
-
-    // Format the decision prompt template with the given parameters
-    fn format(
-        &self,
-        history: &str,
-        decision_prompt: &str,
-        choices: &str,
-        user_input: &str,
-    ) -> String {
-        self.0
-            .replace("{{history}}", history)
-            .replace("{{decision_prompt}}", decision_prompt)
-            .replace("{{choices}}", choices)
-            .replace("{{user_input}}", user_input)
-    }
 }
 
 pub struct DecisionState {
