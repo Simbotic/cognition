@@ -211,17 +211,11 @@ pub async fn run_decision(
             if !predicting_choice {
                 // Update the history with the current text
                 if state.history.len() > 0 {
-                    state
-                        .history
-                        .push_str(&format!("\n  - {}: {}", state.agent, decision_node.text));
-                } else {
-                    state
-                        .history
-                        .push_str(&format!("- {}: {}", state.agent, decision_node.text));
+                    state.history.push_str(&format!("\n  "));
                 }
                 state
                     .history
-                    .push_str(&format!("\n  - {}: {}", state.agent, decision_node.text));
+                    .push_str(&format!("- {}: {}", state.agent, decision_node.text));
                 // Update the history with the user's response
                 state
                     .history
